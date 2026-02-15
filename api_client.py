@@ -1,5 +1,5 @@
 """Asynchronous API client for the Domologica system (Master SRL UNA/Vesta)."""
-import asyncio
+import asyncio 
 import logging
 import xml.etree.ElementTree as ET 
 from urllib.parse import quote
@@ -128,11 +128,16 @@ class DomologicaApiClient:
                     continue
 
                 if eclass not in ELEMENT_CLASS_TO_PLATFORM:
-                    _LOGGER.debug(
-                        "Unsupported class ignored: %s (%s)", eclass, ename
+                    _LOGGER.warning(
+                        "Unsupported class ignored: %s (name=%s, id=%s, scene=%s)",
+                        eclass, ename, eid, scene_name,
                     )
                     continue
 
+                _LOGGER.info(
+                    "Discovered element: id=%s, class=%s, name=%s, scene=%s",
+                    eid, eclass, (ename or "").strip(), scene_name,
+                )
                 element_info[eid] = {
                     "name": (ename or "").strip(),
                     "class": eclass,
@@ -143,6 +148,8 @@ class DomologicaApiClient:
             await asyncio.sleep(0.2)
 
         _LOGGER.info("Discovery completed: %s elements found", len(element_info))
+        for eid, info in element_info.items():
+            _LOGGER.info("  -> %s: %s (%s)", eid, info["name"], info["class"])
         return element_info
 
     # ── Polling statuses ────────────────────────────────────────────
