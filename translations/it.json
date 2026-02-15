@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": { 
+      "user": {
+        "title": "Connessione a Domologica UNA Automation",
+        "description": "Inserisci i dati di connessione del tuo sistema Master SRL UNA/Vesta.",
+        "data": {
+          "base_url": "URL base (es. http://192.168.1.100)",
+          "username": "Nome utente",
+          "password": "Password",
+          "polling_interval": "Intervallo di polling (secondi)",
+          "travel_time": "Tempo corsa tapparelle (secondi)",
+          "enable_delios": "Abilita Inverter Delios (disabilita se gestito da un'altra integrazione)"
+        }
+      },
+      "naming": {
+        "title": "Rinomina Dispositivi",
+        "description": "Trovati {count} dispositivi sulla centralina. Personalizza i nomi qui sotto. Ogni campo mostra il tipo di dispositivo e il suo ID. Il valore predefinito \u00e8 il nome originale dalla centralina."
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile connettersi al server Domologica. Controlla URL e credenziali.",
+      "invalid_auth": "Nome utente o password non validi.",
+      "unknown": "Si \u00e8 verificato un errore imprevisto."
+    },
+    "abort": {
+      "already_configured": "Questo sistema Domologica \u00e8 gi\u00e0 configurato."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opzioni Domologica UNA Automation",
+        "description": "Modifica le impostazioni dell'integrazione.",
+        "data": {
+          "polling_interval": "Intervallo di polling (secondi)",
+          "travel_time": "Tempo corsa tapparelle (secondi)",
+          "enable_delios": "Abilita Inverter Delios"
+        }
+      }
+    }
+  }
+}
