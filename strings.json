@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Domologica UNA Automation",
+        "description": "Enter your Master SRL UNA/Vesta system connection details.",
+        "data": {
+          "base_url": "Base URL (e.g. http://192.168.1.100)",
+          "username": "Username",
+          "password": "Password",
+          "polling_interval": "Polling interval (seconds)",
+          "travel_time": "Shutter travel time (seconds)",
+          "enable_delios": "Enable Delios Inverter (disable if managed by another integration)"
+        }
+      },
+      "naming": {
+        "title": "Rename Devices",
+        "description": "Found {count} devices on your system. Customize their names below. Each field label shows the device type and ID. The default value is the original name from the controller."
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the Domologica server. Check the URL and credentials.",
+      "invalid_auth": "Invalid username or password.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This Domologica system is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Domologica UNA Automation Options",
+        "description": "Adjust integration settings.",
+        "data": {
+          "polling_interval": "Polling interval (seconds)",
+          "travel_time": "Shutter travel time (seconds)",
+          "enable_delios": "Enable Delios Inverter"
+        }
+      }
+    }
+  }
+}
