@@ -305,3 +305,7 @@ class DomologicaApiClient:
     async def async_switch_command(self, eid: str, turn_on: bool) -> bool:
         action = "Runpwm" if turn_on else "Stoppwm"
         return await self.async_send_action(eid, action)
+
+    async def async_alarm_command(self, eid: str, arm: bool) -> bool:
+        action = "switchon" if arm else "switchoff"
+        return await self.async_send_action(eid, action)

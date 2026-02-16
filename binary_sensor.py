@@ -1,8 +1,9 @@
 """Binary Sensor platform for the Domologica UNA Automation integration.
 
-Handles: StatusElement (system status, alarms).
+Handles: StatusElement (system status).
+Alarm-related StatusElements are handled by alarm_control_panel.
 """
-import logging 
+import logging
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -11,16 +12,20 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import ALARM_KEYWORDS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _is_alarm_element(info: dict) -> bool:
+    """Return True if this StatusElement represents a burglar alarm."""
+    name_lower = (info.get("name") or "").lower()
+    return any(kw in name_lower for kw in ALARM_KEYWORDS)
 
 
 def _guess_device_class(name: str) -> BinarySensorDeviceClass:
     """Deduce device_class from element name."""
     name_lower = name.lower()
-    if "allarme" in name_lower or "alarm" in name_lower or "antifurto" in name_lower or "theft" in name_lower:
-        return BinarySensorDeviceClass.SAFETY
     if "stato" in name_lower or "status" in name_lower:
         return BinarySensorDeviceClass.POWER
     return BinarySensorDeviceClass.PROBLEM
@@ -31,7 +36,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entities = [
         DomologicaStatusSensor(coordinator, eid, info)
         for eid, info in coordinator.element_info.items()
-        if info["class"] == "StatusElement"
+        if info["class"] == "StatusElement" and not _is_alarm_element(info)
     ]
     _LOGGER.info("Loading %s binary sensor entities", len(entities))
     async_add_entities(entities)

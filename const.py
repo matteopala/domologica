@@ -23,6 +23,7 @@ TYPE_LABELS = {
 }
 
 PLATFORMS = [
+    "alarm_control_panel",
     "light",
     "cover",
     "sensor",
@@ -32,6 +33,9 @@ PLATFORMS = [
     "button",
     "switch",
 ]
+
+# Keywords that identify alarm StatusElements (case-insensitive)
+ALARM_KEYWORDS = {"antifurto", "burglar", "alarm"}
 
 # HTTP request timeouts
 REQUEST_TIMEOUT = 30
