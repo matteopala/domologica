@@ -1,6 +1,6 @@
 {
   "config": {
-    "step": { 
+    "step": {
       "user": {
         "title": "Connessione a Domologica UNA Automation",
         "description": "Inserisci i dati di connessione del tuo sistema Master SRL UNA/Vesta.",
@@ -10,7 +10,10 @@
           "password": "Password",
           "polling_interval": "Intervallo di polling (secondi)",
           "travel_time": "Tempo corsa tapparelle (secondi)",
-          "enable_delios": "Abilita Inverter Delios (disabilita se gestito da un'altra integrazione)"
+          "enable_delios": "Abilita Inverter Delios (disabilita se gestito da un'altra integrazione)",
+          "alarm_pin": "PIN Allarme (lascia vuoto se non utilizzato)",
+          "alarm_state_eid": "ID elemento sensore stato allarme (es. 31)",
+          "alarm_siren_eid": "ID elemento sensore sirena allarme (es. 34)"
         }
       },
       "naming": {
@@ -35,7 +38,11 @@
         "data": {
           "polling_interval": "Intervallo di polling (secondi)",
           "travel_time": "Tempo corsa tapparelle (secondi)",
-          "enable_delios": "Abilita Inverter Delios"
+          "enable_delios": "Abilita Inverter Delios",
+          "enable_samsung_ac": "Abilita Samsung AC / Canalizzato",
+          "alarm_pin": "PIN Allarme (lascia vuoto per disabilitare il pannello allarme)",
+          "alarm_state_eid": "ID elemento sensore stato allarme (es. 31)",
+          "alarm_siren_eid": "ID elemento sensore sirena allarme (es. 34)"
         }
       }
     }
