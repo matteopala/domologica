@@ -1,8 +1,11 @@
 """Climate platform for the Domologica UNA Automation integration.
 
 Manages: ThermostatElement, ModbusSamsungAir2Element.
+Uses optimistic state updates: after sending a command the UI reflects
+the expected state immediately; the next coordinator poll confirms or
+corrects it.
 """
-import logging 
+import logging
 
 from homeassistant.components.climate import (
     ClimateEntity,
@@ -11,6 +14,7 @@ from homeassistant.components.climate import (
     HVACMode,
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
+from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -60,6 +64,13 @@ class DomologicaThermostat(CoordinatorEntity, ClimateEntity):
         self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL]
         self._attr_preset_modes = ["comfort", "eco", "schedule"]
         self._attr_fan_modes = FAN_MODES
+        self._optimistic: dict = {}
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Clear optimistic overrides when real data arrives."""
+        self._optimistic.clear()
+        super()._handle_coordinator_update()
 
     @property
     def unique_id(self):
@@ -71,7 +82,12 @@ class DomologicaThermostat(CoordinatorEntity, ClimateEntity):
 
     @property
     def _data(self) -> dict:
-        return (self.coordinator.data or {}).get(self._eid, {})
+        real = (self.coordinator.data or {}).get(self._eid, {})
+        if self._optimistic:
+            merged = dict(real)
+            merged.update(self._optimistic)
+            return merged
+        return real
 
     @property
     def current_temperature(self) -> float | None:
@@ -132,15 +148,20 @@ class DomologicaThermostat(CoordinatorEntity, ClimateEntity):
         api = self.coordinator.api_client
         if hvac_mode == HVACMode.OFF:
             await api.async_thermostat_set_mode(self._eid, "Off")
+            self._optimistic["t_mode"] = "Off"
         elif hvac_mode == HVACMode.HEAT:
             await api.async_thermostat_set_season(self._eid, "Winter")
+            self._optimistic["season"] = "Winter"
             if self._data.get("t_mode") == "Off":
                 await api.async_thermostat_set_mode(self._eid, "TMax")
+                self._optimistic["t_mode"] = "TMax"
         elif hvac_mode == HVACMode.COOL:
             await api.async_thermostat_set_season(self._eid, "Summer")
+            self._optimistic["season"] = "Summer"
             if self._data.get("t_mode") == "Off":
                 await api.async_thermostat_set_mode(self._eid, "TMin")
-        await self.coordinator.async_request_refresh()
+                self._optimistic["t_mode"] = "TMin"
+        self.async_write_ha_state()
 
     async def async_set_temperature(self, **kwargs) -> None:
         temp = kwargs.get(ATTR_TEMPERATURE)
@@ -150,9 +171,11 @@ class DomologicaThermostat(CoordinatorEntity, ClimateEntity):
         season = self._data.get("season", "Winter")
         if season == "Winter":
             await api.async_thermostat_set_temp_max(self._eid, temp)
+            self._optimistic["t_max"] = temp
         else:
             await api.async_thermostat_set_temp_min(self._eid, temp)
-        await self.coordinator.async_request_refresh()
+            self._optimistic["t_min"] = temp
+        self.async_write_ha_state()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         vesta_mode = THERMOSTAT_PRESET_REVERSE.get(preset_mode)
@@ -160,7 +183,8 @@ class DomologicaThermostat(CoordinatorEntity, ClimateEntity):
             await self.coordinator.api_client.async_thermostat_set_mode(
                 self._eid, vesta_mode
             )
-            await self.coordinator.async_request_refresh()
+            self._optimistic["t_mode"] = vesta_mode
+            self.async_write_ha_state()
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         speed_map = {"auto": 0, "low": 33, "medium": 66, "high": 100}
@@ -168,7 +192,8 @@ class DomologicaThermostat(CoordinatorEntity, ClimateEntity):
         await self.coordinator.api_client.async_thermostat_set_speed(
             self._eid, speed
         )
-        await self.coordinator.async_request_refresh()
+        self._optimistic["speed"] = speed
+        self.async_write_ha_state()
 
 
 # ── Samsung AC ───────────────────────────────────────────────
@@ -177,9 +202,12 @@ class DomologicaThermostat(CoordinatorEntity, ClimateEntity):
 SAMSUNG_HVAC_ACTIONS = {
     HVACMode.HEAT: "setseasonwinter",
     HVACMode.COOL: "setseasonsummer",
-    HVACMode.AUTO: "Set AC unit Mode Auto",
-    HVACMode.DRY: "Set AC unit Mode Dry",
-    HVACMode.FAN_ONLY: "Set AC unit Mode Fan",
+}
+
+# Mapping from hvac_mode HA → internal mode string
+SAMSUNG_MODE_STRINGS = {
+    HVACMode.HEAT: "heat",
+    HVACMode.COOL: "cool",
 }
 
 
@@ -205,11 +233,15 @@ class DomologicaSamsungAC(CoordinatorEntity, ClimateEntity):
             HVACMode.OFF,
             HVACMode.HEAT,
             HVACMode.COOL,
-            HVACMode.AUTO,
-            HVACMode.DRY,
-            HVACMode.FAN_ONLY,
         ]
         self._attr_fan_modes = FAN_MODES
+        self._optimistic: dict = {}
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Clear optimistic overrides when real data arrives."""
+        self._optimistic.clear()
+        super()._handle_coordinator_update()
 
     @property
     def unique_id(self):
@@ -221,7 +253,12 @@ class DomologicaSamsungAC(CoordinatorEntity, ClimateEntity):
 
     @property
     def _data(self) -> dict:
-        return (self.coordinator.data or {}).get(self._eid, {})
+        real = (self.coordinator.data or {}).get(self._eid, {})
+        if self._optimistic:
+            merged = dict(real)
+            merged.update(self._optimistic)
+            return merged
+        return real
 
     @property
     def current_temperature(self) -> float | None:
@@ -239,11 +276,8 @@ class DomologicaSamsungAC(CoordinatorEntity, ClimateEntity):
         mode_map = {
             "heat": HVACMode.HEAT,
             "cool": HVACMode.COOL,
-            "auto": HVACMode.AUTO,
-            "dry": HVACMode.DRY,
-            "fan_only": HVACMode.FAN_ONLY,
         }
-        return mode_map.get(mode, HVACMode.AUTO)
+        return mode_map.get(mode, HVACMode.HEAT)
 
     @property
     def hvac_action(self) -> HVACAction:
@@ -255,22 +289,13 @@ class DomologicaSamsungAC(CoordinatorEntity, ClimateEntity):
             return HVACAction.HEATING if delta_t > 0 else HVACAction.IDLE
         if mode == "cool":
             return HVACAction.COOLING if delta_t < 0 else HVACAction.IDLE
-        if mode == "dry":
-            return HVACAction.DRYING
-        if mode == "fan_only":
-            return HVACAction.FAN
         return HVACAction.IDLE
 
     @property
     def fan_mode(self) -> str:
         speed = self._data.get("fan_speed", 0) or 0
-        if speed <= 0:
-            return "auto"
-        if speed <= 33:
-            return "low"
-        if speed <= 66:
-            return "medium"
-        return "high"
+        fan_map = {0: "auto", 1: "low", 2: "medium", 3: "high"}
+        return fan_map.get(int(speed), "auto")
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -287,15 +312,16 @@ class DomologicaSamsungAC(CoordinatorEntity, ClimateEntity):
         api = self.coordinator.api_client
         if hvac_mode == HVACMode.OFF:
             await api.async_light_switch(self._eid, False)
+            self._optimistic["is_on"] = False
         else:
-            # Turn on if off
             if not self._data.get("is_on", False):
                 await api.async_light_switch(self._eid, True)
-            # Set mode
             action = SAMSUNG_HVAC_ACTIONS.get(hvac_mode)
             if action:
                 await api.async_samsung_ac_set_mode(self._eid, action)
-        await self.coordinator.async_request_refresh()
+            self._optimistic["is_on"] = True
+            self._optimistic["mode"] = SAMSUNG_MODE_STRINGS.get(hvac_mode, "heat")
+        self.async_write_ha_state()
 
     async def async_set_temperature(self, **kwargs) -> None:
         temp = kwargs.get(ATTR_TEMPERATURE)
@@ -303,12 +329,14 @@ class DomologicaSamsungAC(CoordinatorEntity, ClimateEntity):
             await self.coordinator.api_client.async_samsung_ac_set_temp(
                 self._eid, temp
             )
-            await self.coordinator.async_request_refresh()
+            self._optimistic["target_temp"] = temp
+            self.async_write_ha_state()
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
-        speed_map = {"auto": 0, "low": 33, "medium": 66, "high": 100}
+        speed_map = {"auto": 0, "low": 1, "medium": 2, "high": 3}
         speed = speed_map.get(fan_mode, 0)
         await self.coordinator.api_client.async_samsung_ac_set_fan(
             self._eid, speed
         )
-        await self.coordinator.async_request_refresh()
+        self._optimistic["fan_speed"] = speed
+        self.async_write_ha_state()

@@ -1,7 +1,7 @@
 """Asynchronous API client for the Domologica system (Master SRL UNA/Vesta)."""
-import asyncio 
+import asyncio
 import logging
-import xml.etree.ElementTree as ET 
+import xml.etree.ElementTree as ET
 from urllib.parse import quote
 
 import aiohttp
@@ -186,7 +186,7 @@ class DomologicaApiClient:
         """
         numeric_id = element_id.split("/")[-1] if "/" in element_id else element_id
 
-        # Build URL with parameters
+        # Build URL with parameters — brackets must NOT be encoded
         params = f"_method=put&action={quote(action, safe='')}"
 
         if arguments:
@@ -194,10 +194,8 @@ class DomologicaApiClient:
                 arg_val = quote(str(arg["value"]), safe="")
                 arg_type = quote(str(arg.get("type", "int")), safe="")
                 params += (
-                    f"&{quote(f'arguments[{idx}][value]', safe='')}"
-                    f"={arg_val}"
-                    f"&{quote(f'arguments[{idx}][type]', safe='')}"
-                    f"={arg_type}"
+                    f"&arguments[{idx}][type]={arg_type}"
+                    f"&arguments[{idx}][value]={arg_val}"
                 )
 
         url = f"{self.base_url}/elements/{numeric_id}?{params}"
@@ -284,7 +282,7 @@ class DomologicaApiClient:
 
     async def async_samsung_ac_set_fan(self, eid: str, speed: int) -> bool:
         return await self.async_send_action(
-            eid, "setdimmer", {0: {"value": str(speed), "type": "int"}}
+            eid, "setdimmer", {0: {"value": str(speed), "type": "QString"}}
         )
 
     async def async_samsung_ac_set_mode(self, eid: str, action: str) -> bool:
@@ -306,6 +304,9 @@ class DomologicaApiClient:
         action = "Runpwm" if turn_on else "Stoppwm"
         return await self.async_send_action(eid, action)
 
-    async def async_alarm_command(self, eid: str, arm: bool) -> bool:
-        action = "switchon" if arm else "switchoff"
-        return await self.async_send_action(eid, action)
+    async def async_keypad_verify_pin(self, eid: str, pin: str) -> bool:
+        """Toggle alarm via VirtualKeypadElement PIN verification."""
+        return await self.async_send_action(
+            eid, "userpinverify",
+            {0: {"value": pin, "type": "QString"}},
+        )

@@ -10,7 +10,11 @@
           "password": "Password",
           "polling_interval": "Polling interval (seconds)",
           "travel_time": "Shutter travel time (seconds)",
-          "enable_delios": "Enable Delios Inverter (disable if managed by another integration)"
+          "enable_delios": "Enable Delios Inverter (disable if managed by another integration)",
+          "enable_samsung_ac": "Enable Samsung AC / Canalizzato (disable if managed by another integration)",
+          "alarm_pin": "Alarm PIN (leave empty if not used)",
+          "alarm_state_eid": "Alarm state sensor element ID (e.g. 31)",
+          "alarm_siren_eid": "Alarm siren sensor element ID (e.g. 34)"
         }
       },
       "naming": {
@@ -35,7 +39,11 @@
         "data": {
           "polling_interval": "Polling interval (seconds)",
           "travel_time": "Shutter travel time (seconds)",
-          "enable_delios": "Enable Delios Inverter"
+          "enable_delios": "Enable Delios Inverter",
+          "enable_samsung_ac": "Enable Samsung AC / Canalizzato",
+          "alarm_pin": "Alarm PIN (leave empty to disable alarm panel)",
+          "alarm_state_eid": "Alarm state sensor element ID (e.g. 31)",
+          "alarm_siren_eid": "Alarm siren sensor element ID (e.g. 34)"
         }
       }
     }

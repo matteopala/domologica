@@ -20,10 +20,10 @@ TYPE_LABELS = {
     "StatusElement": "Status",
     "SwitchElement": "Scenario",
     "UpDownSwitchElement": "Shutter Control",
+    "VirtualKeypadElement": "Alarm Keypad",
 }
 
 PLATFORMS = [
-    "alarm_control_panel",
     "light",
     "cover",
     "sensor",
@@ -32,10 +32,8 @@ PLATFORMS = [
     "binary_sensor",
     "button",
     "switch",
+    "alarm_control_panel",
 ]
-
-# Keywords that identify alarm StatusElements (case-insensitive)
-ALARM_KEYWORDS = {"antifurto", "burglar", "alarm"}
 
 # HTTP request timeouts
 REQUEST_TIMEOUT = 30
@@ -43,7 +41,7 @@ CONNECT_TIMEOUT = 10
 MAX_CONCURRENT_REQUESTS = 3
 
 # Default configuration
-DEFAULT_POLLING_INTERVAL = 30
+DEFAULT_POLLING_INTERVAL = 15
 DEFAULT_TRAVEL_TIME = 25
 
 # Mapping classId -> HA platform
@@ -52,7 +50,7 @@ ELEMENT_CLASS_TO_PLATFORM = {
     "DimmerableLightLedElement": "light",
     "ShutterElement": "cover",
     "TASensorElement": "sensor",
-    "ThermostatElement": "climate",
+    "ThermostatElement": ["climate", "sensor"],
     "ModbusSamsungAir2Element": "climate",
     "ModbusSamsungElement": "water_heater",
     "DeliosMainUnitElement": "sensor",
@@ -60,12 +58,12 @@ ELEMENT_CLASS_TO_PLATFORM = {
     "StatusElement": "binary_sensor",
     "SwitchElement": "button",
     "UpDownSwitchElement": "button",
+    "VirtualKeypadElement": "alarm_control_panel",
 }
 
 # Classes to completely ignore
 IGNORED_CLASSES = {
     "WebPageElement",
-    "VirtualKeypadElement",
 }
 
 # Light classes

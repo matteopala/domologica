@@ -1,6 +1,7 @@
 """Water Heater platform for the Domologica UNA Automation integration.
 
 Handles: ModbusSamsungElement (Samsung EHS2 - Domestic Hot Water).
+Uses optimistic state updates.
 """
 import logging
 
@@ -9,12 +10,16 @@ from homeassistant.components.water_heater import (
     WaterHeaterEntityFeature,
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
+from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, WATER_HEATER_MODES, WATER_HEATER_MODE_ACTIONS
 
 _LOGGER = logging.getLogger(__name__)
+
+# Reverse map: mode name → h2o_mode int
+WATER_HEATER_MODE_INTS = {"eco": 0, "standard": 1, "power": 2, "force": 3}
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -45,6 +50,13 @@ class DomologicaWaterHeater(CoordinatorEntity, WaterHeaterEntity):
             | WaterHeaterEntityFeature.ON_OFF
         )
         self._attr_operation_list = WATER_HEATER_MODES
+        self._optimistic: dict = {}
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Clear optimistic overrides when real data arrives."""
+        self._optimistic.clear()
+        super()._handle_coordinator_update()
 
     @property
     def unique_id(self):
@@ -56,7 +68,12 @@ class DomologicaWaterHeater(CoordinatorEntity, WaterHeaterEntity):
 
     @property
     def _data(self) -> dict:
-        return (self.coordinator.data or {}).get(self._eid, {})
+        real = (self.coordinator.data or {}).get(self._eid, {})
+        if self._optimistic:
+            merged = dict(real)
+            merged.update(self._optimistic)
+            return merged
+        return real
 
     @property
     def current_temperature(self) -> float | None:
@@ -101,7 +118,8 @@ class DomologicaWaterHeater(CoordinatorEntity, WaterHeaterEntity):
             await self.coordinator.api_client.async_water_heater_set_temp(
                 self._eid, temp
             )
-            await self.coordinator.async_request_refresh()
+            self._optimistic["h2o_setted"] = temp
+            self.async_write_ha_state()
 
     async def async_set_operation_mode(self, operation_mode: str) -> None:
         action = WATER_HEATER_MODE_ACTIONS.get(operation_mode)
@@ -109,12 +127,17 @@ class DomologicaWaterHeater(CoordinatorEntity, WaterHeaterEntity):
             await self.coordinator.api_client.async_water_heater_set_mode(
                 self._eid, action
             )
-            await self.coordinator.async_request_refresh()
+            mode_int = WATER_HEATER_MODE_INTS.get(operation_mode)
+            if mode_int is not None:
+                self._optimistic["h2o_mode"] = mode_int
+            self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs) -> None:
         await self.coordinator.api_client.async_light_switch(self._eid, True)
-        await self.coordinator.async_request_refresh()
+        self._optimistic["is_on"] = True
+        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs) -> None:
         await self.coordinator.api_client.async_light_switch(self._eid, False)
-        await self.coordinator.async_request_refresh()
+        self._optimistic["is_on"] = False
+        self.async_write_ha_state()

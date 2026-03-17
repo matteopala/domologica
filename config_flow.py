@@ -3,7 +3,7 @@
 Step 1: Connection and configuration parameters.
 Step 2: Discovery and device name customization.
 """
-import logging 
+import logging
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -50,6 +50,13 @@ class DomologicaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             if info["class"] != "DeliosMainUnitElement"
                         }
 
+                    # Filter out Samsung AC elements if not enabled
+                    if not user_input.get("enable_samsung_ac", False):
+                        discovered = {
+                            eid: info for eid, info in discovered.items()
+                            if info["class"] != "ModbusSamsungAir2Element"
+                        }
+
                     self._discovered = discovered
 
                     if self._discovered:
@@ -82,6 +89,12 @@ class DomologicaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Optional(
                         "enable_delios", default=False
                     ): bool,
+                    vol.Optional(
+                        "enable_samsung_ac", default=False
+                    ): bool,
+                    vol.Optional("alarm_pin", default=""): str,
+                    vol.Optional("alarm_state_eid", default=""): str,
+                    vol.Optional("alarm_siren_eid", default=""): str,
                 }
             ),
             errors=errors,
@@ -153,6 +166,22 @@ class DomologicaOptionsFlowHandler(config_entries.OptionsFlow):
             "enable_delios",
             self.config_entry.data.get("enable_delios", False),
         )
+        current_samsung_ac = self.config_entry.options.get(
+            "enable_samsung_ac",
+            self.config_entry.data.get("enable_samsung_ac", False),
+        )
+        current_alarm_pin = self.config_entry.options.get(
+            "alarm_pin",
+            self.config_entry.data.get("alarm_pin", ""),
+        )
+        current_alarm_state_eid = self.config_entry.options.get(
+            "alarm_state_eid",
+            self.config_entry.data.get("alarm_state_eid", ""),
+        )
+        current_alarm_siren_eid = self.config_entry.options.get(
+            "alarm_siren_eid",
+            self.config_entry.data.get("alarm_siren_eid", ""),
+        )
 
         return self.async_show_form(
             step_id="init",
@@ -167,6 +196,18 @@ class DomologicaOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(
                         "enable_delios", default=current_delios
                     ): bool,
+                    vol.Optional(
+                        "enable_samsung_ac", default=current_samsung_ac
+                    ): bool,
+                    vol.Optional(
+                        "alarm_pin", default=current_alarm_pin
+                    ): str,
+                    vol.Optional(
+                        "alarm_state_eid", default=current_alarm_state_eid
+                    ): str,
+                    vol.Optional(
+                        "alarm_siren_eid", default=current_alarm_siren_eid
+                    ): str,
                 }
             ),
         )

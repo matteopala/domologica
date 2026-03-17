@@ -130,7 +130,10 @@ def parse_samsung_ac(statuses: dict) -> dict:
     speed = _safe_int(_get_status_value(statuses, "speed"))
     delta_t = _safe_float(_get_status_value(statuses, "deltat"))
 
-    is_on = not _has_status(statuses, "IsSwitchedOff")
+    is_on = _has_status(statuses, "isswitchedon") or (
+        not _has_status(statuses, "IsSwitchedOff")
+        and not _has_status(statuses, "isswitchedoff")
+    )
     is_connected = _has_status(statuses, "IsConnected")
 
     # Determine mode from flags
@@ -293,7 +296,11 @@ def parse_power_management(statuses: dict) -> dict:
 
 def parse_status_element(statuses: dict) -> dict:
     is_on = _has_status(statuses, "statuson")
-    return {"is_on": is_on}
+    is_off = _has_status(statuses, "statusoff")
+    return {
+        "is_on": is_on,
+        "has_status_flag": is_on or is_off,
+    }
 
 
 def parse_switch_element(statuses: dict) -> dict:
@@ -303,6 +310,11 @@ def parse_switch_element(statuses: dict) -> dict:
 
 def parse_updown_switch(statuses: dict) -> dict:
     return {}
+
+
+def parse_virtual_keypad(statuses: dict) -> dict:
+    is_verified = _has_status(statuses, "userpinisverified")
+    return {"is_verified": is_verified}
 
 
 # ── Utility ──────────────────────────────────────────────────
@@ -338,6 +350,7 @@ PARSER_MAP = {
     "StatusElement": parse_status_element,
     "SwitchElement": parse_switch_element,
     "UpDownSwitchElement": parse_updown_switch,
+    "VirtualKeypadElement": parse_virtual_keypad,
 }
 
 

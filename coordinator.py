@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
-) 
+)
 
 from .api_client import DomologicaApiClient
 from .const import (
@@ -36,6 +36,10 @@ class DomologicaCoordinator(DataUpdateCoordinator):
     ) -> None:
         self.entry = entry
         self.element_info: dict[str, dict] = {}
+
+        # Auto-detected alarm sensor IDs (populated during discovery)
+        self._auto_alarm_state_eid: str = ""
+        self._auto_alarm_siren_eid: str = ""
 
         # API client
         self.api_client = DomologicaApiClient(hass, host, username, password)
@@ -72,6 +76,38 @@ class DomologicaCoordinator(DataUpdateCoordinator):
             "sw_version": self.entry.data.get("sw_version", ""),
             "configuration_url": self.api_client.base_url,
         }
+
+    @property
+    def alarm_pin(self) -> str:
+        """Alarm PIN (options take precedence over initial config)."""
+        return self.entry.options.get(
+            "alarm_pin",
+            self.entry.data.get("alarm_pin", ""),
+        )
+
+    @property
+    def alarm_state_eid(self) -> str:
+        """Element ID of the StatusElement for armed/disarmed state.
+
+        Priority: options > config data > auto-detected.
+        """
+        return (
+            self.entry.options.get("alarm_state_eid")
+            or self.entry.data.get("alarm_state_eid")
+            or self._auto_alarm_state_eid
+        )
+
+    @property
+    def alarm_siren_eid(self) -> str:
+        """Element ID of the StatusElement for siren/triggered state.
+
+        Priority: options > config data > auto-detected.
+        """
+        return (
+            self.entry.options.get("alarm_siren_eid")
+            or self.entry.data.get("alarm_siren_eid")
+            or self._auto_alarm_siren_eid
+        )
 
     def delios_device_info_dict(self, eid: str, element_name: str) -> dict:
         """Device information for the Delios inverter (separate device)."""
@@ -124,7 +160,78 @@ class DomologicaCoordinator(DataUpdateCoordinator):
 
         # Initial data fetch
         await self.async_config_entry_first_refresh()
+
+        # Auto-detect alarm sensors from real polling data
+        self._auto_detect_alarm_sensors()
+
         return True
+
+    def _auto_detect_alarm_sensors(self) -> None:
+        """Detect alarm StatusElements from first-fetch polling data.
+
+        Heuristic:
+        1. Only StatusElements that report statuson/statusoff in their
+           runtime status have ``has_status_flag=True`` — these are the
+           alarm-related sensors (other StatusElements use different IDs).
+        2. At setup time the siren is not sounding, so the siren sensor
+           reports ``statuson`` (is_on=True).  The alarm state sensor
+           reports ``statusoff`` (is_on=False) because the alarm is
+           typically disarmed during configuration.
+
+        Only runs when a VirtualKeypadElement exists and the EIDs are
+        not already set manually via options / config data.
+        """
+        # Skip if both are already manually configured
+        if self.alarm_state_eid and self.alarm_siren_eid:
+            return
+
+        has_keypad = any(
+            info["class"] == "VirtualKeypadElement"
+            for info in self.element_info.values()
+        )
+        if not has_keypad:
+            return
+
+        data = self.data or {}
+
+        # Collect StatusElements whose polling data has has_status_flag
+        flagged: list[tuple[str, dict, dict]] = []
+        for eid, info in self.element_info.items():
+            if info["class"] != "StatusElement":
+                continue
+            edata = data.get(eid, {})
+            if edata.get("has_status_flag"):
+                flagged.append((eid, info, edata))
+
+        if len(flagged) != 2:
+            if flagged:
+                _LOGGER.warning(
+                    "Expected 2 alarm StatusElements with statuson/statusoff, "
+                    "found %s — skipping auto-detection. "
+                    "Set alarm_state_eid / alarm_siren_eid manually in options.",
+                    len(flagged),
+                )
+            return
+
+        # The one currently ON is the siren (not sounding at setup)
+        # The one currently OFF is the alarm state (disarmed at setup)
+        for eid, info, edata in flagged:
+            if edata.get("is_on"):
+                if not self._auto_alarm_siren_eid:
+                    self._auto_alarm_siren_eid = eid
+                    _LOGGER.info(
+                        "Auto-detected alarm siren sensor: id=%s, name=%s "
+                        "(statuson at startup = siren silent)",
+                        eid, info["name"],
+                    )
+            else:
+                if not self._auto_alarm_state_eid:
+                    self._auto_alarm_state_eid = eid
+                    _LOGGER.info(
+                        "Auto-detected alarm state sensor: id=%s, name=%s "
+                        "(statusoff at startup = alarm disarmed)",
+                        eid, info["name"],
+                    )
 
     async def _async_update_data(self) -> dict:
         """Periodic status retrieval via XML polling."""

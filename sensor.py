@@ -90,6 +90,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
                     )
                 )
 
+        elif eclass == "ThermostatElement":
+            entities.append(
+                DomologicaThermostatTempSensor(coordinator, eid, info["name"])
+            )
+            entities.append(
+                DomologicaThermostatSeasonSensor(coordinator, eid, info["name"])
+            )
+
         elif eclass == "PowerMenagementElement":
             entities.append(
                 DomologicaPowerMgmtSensor(
@@ -378,3 +386,63 @@ class DomologicaPowerMgmtSensor(CoordinatorEntity, SensorEntity):
             except (ValueError, TypeError):
                 return None
         return None
+
+
+# -- Thermostat Sensors ----------------------------------------
+
+
+class DomologicaThermostatTempSensor(CoordinatorEntity, SensorEntity):
+    """Temperature sensor derived from ThermostatElement."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+
+    def __init__(self, coordinator, eid, name):
+        super().__init__(coordinator)
+        self._eid = eid
+        self._attr_name = f"{name} Temperature"
+
+    @property
+    def unique_id(self):
+        return f"domologica_{self._eid}_thermostat_temp"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(**self.coordinator.device_info_dict)
+
+    @property
+    def native_value(self):
+        data = (self.coordinator.data or {}).get(self._eid)
+        if not data:
+            return None
+        temp = data.get("temperature")
+        if temp is not None:
+            return temp
+        return None
+
+
+class DomologicaThermostatSeasonSensor(CoordinatorEntity, SensorEntity):
+    """Season sensor (Winter/Summer) from ThermostatElement."""
+
+    _attr_icon = "mdi:weather-sunny"
+
+    def __init__(self, coordinator, eid, name):
+        super().__init__(coordinator)
+        self._eid = eid
+        self._attr_name = f"{name} Season"
+
+    @property
+    def unique_id(self):
+        return f"domologica_{self._eid}_thermostat_season"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(**self.coordinator.device_info_dict)
+
+    @property
+    def native_value(self):
+        data = (self.coordinator.data or {}).get(self._eid)
+        if not data:
+            return None
+        return data.get("season")
