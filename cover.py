@@ -1,4 +1,7 @@
-"""Cover platform for the Domologica UNA Automation integration."""
+"""Cover platform for the Domologica UNA Automation integration.
+
+Uses RestoreEntity to persist the estimated position across HA restarts.
+"""
 import asyncio
 import logging
 import time
@@ -6,9 +9,10 @@ import time
 from homeassistant.components.cover import (
     CoverDeviceClass,
     CoverEntity,
-    CoverEntityFeature, 
+    CoverEntityFeature,
 )
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
@@ -27,8 +31,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(entities)
 
 
-class DomologicaCover(CoordinatorEntity, CoverEntity):
-    """Domologica shutter entity with position estimation."""
+class DomologicaCover(CoordinatorEntity, RestoreEntity, CoverEntity):
+    """Domologica shutter entity with position estimation and state persistence."""
 
     def __init__(self, coordinator, eid, name, travel_time):
         super().__init__(coordinator)
@@ -41,9 +45,26 @@ class DomologicaCover(CoordinatorEntity, CoverEntity):
             | CoverEntityFeature.CLOSE
             | CoverEntityFeature.STOP
         )
-        self._attr_current_cover_position = 50
+        self._attr_current_cover_position = 50  # default, overridden by restore
         self._last_tick = None
         self._verify_task = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore last known position when HA starts."""
+        await super().async_added_to_hass()
+
+        last_state = await self.async_get_last_state()
+        if last_state is not None:
+            restored_pos = last_state.attributes.get("current_position")
+            if restored_pos is not None:
+                try:
+                    self._attr_current_cover_position = float(restored_pos)
+                    _LOGGER.debug(
+                        "Restored cover %s position to %s%%",
+                        self._eid, int(restored_pos),
+                    )
+                except (ValueError, TypeError):
+                    pass
 
     @property
     def unique_id(self):
