@@ -17,7 +17,7 @@ Custom Home Assistant integration for **Master SRL UNA/Vesta** home automation s
 | Samsung AC | `climate` | Temperature, HVAC mode, fan speed |
 | Samsung EHS2 (hot water) | `water_heater` | Temperature, operation mode (ECO/STD/PWR/FORCE) |
 | Delios Inverter | `sensor` | 20+ metrics: PV, battery, grid, temperature, energy |
-| Power Management | `sensor` + `switch` | Current/max power, load shedding on/off |
+| Power Management | `switch` | Load shedding on/off |
 | Status elements | `binary_sensor` | System status, alarm status |
 | Scenarios | `button` | Trigger scene activation |
 | General shutter control | `button` | All shutters up/down |
@@ -63,7 +63,6 @@ After installation, you can adjust settings via **Settings** > **Devices & Servi
 The integration automatically creates **energy sensors (kWh)** from power sensors using Riemann sum integration (trapezoidal rule). These are compatible with the Home Assistant **Energy Dashboard**:
 
 - Power sensors (TASensorElement) get a companion energy sensor
-- Power Management elements get a consumption energy sensor
 - Delios inverter power metrics (grid in/out, PV1, PV2) get companion energy sensors
 
 ## Supported Element Classes

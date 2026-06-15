@@ -54,10 +54,6 @@ class DomologicaPowerSwitch(CoordinatorEntity, SwitchEntity):
     def extra_state_attributes(self) -> dict:
         data = (self.coordinator.data or {}).get(self._eid, {})
         attrs = {}
-        if data.get("current_power") is not None:
-            attrs["current_power_w"] = data["current_power"]
-        if data.get("max_power") is not None:
-            attrs["max_power_w"] = data["max_power"]
         if data.get("is_normal") is not None:
             attrs["normal_measure"] = data["is_normal"]
         return attrs
