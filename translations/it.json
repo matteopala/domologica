@@ -11,6 +11,7 @@
           "polling_interval": "Intervallo di polling (secondi)",
           "travel_time": "Tempo corsa tapparelle (secondi)",
           "enable_delios": "Abilita Inverter Delios (disabilita se gestito da un'altra integrazione)",
+          "enable_samsung_ac": "Abilita Samsung AC / Canalizzato (disabilita se gestito da un'altra integrazione)",
           "alarm_pin": "PIN Allarme (lascia vuoto se non utilizzato)",
           "alarm_state_eid": "ID elemento sensore stato allarme (es. 31)",
           "alarm_siren_eid": "ID elemento sensore sirena allarme (es. 34)"

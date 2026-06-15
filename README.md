@@ -21,6 +21,7 @@ Custom Home Assistant integration for **Master SRL UNA/Vesta** home automation s
 | Status elements | `binary_sensor` | System status, alarm status |
 | Scenarios | `button` | Trigger scene activation |
 | General shutter control | `button` | All shutters up/down |
+| Alarm keypad | `alarm_control_panel` | Arm/disarm via PIN, triggered state |
 
 ## Installation
 
@@ -48,6 +49,9 @@ Custom Home Assistant integration for **Master SRL UNA/Vesta** home automation s
    - **Polling interval**: How often to poll for status updates (default: 30s)
    - **Shutter travel time**: Time for shutters to fully open/close (default: 25s)
    - **Enable Delios Inverter**: Enable if you want this integration to manage the Delios inverter (disabled by default if you use the dedicated Delios integration)
+   - **Enable Samsung AC / Canalizzato**: Enable if you want this integration to manage the Samsung air conditioner (disabled by default if you use a dedicated ESPHome/other integration for it)
+   - **Alarm PIN** *(optional)*: PIN used to arm/disarm the alarm panel; leave empty to disable the panel
+   - **Alarm state / siren element IDs** *(optional)*: override the auto-detected `StatusElement` IDs for the alarm armed/triggered state (e.g. `31` / `34`)
 4. In the next step you can **rename** each discovered device before it is created in Home Assistant
 
 ## Options
@@ -57,6 +61,8 @@ After installation, you can adjust settings via **Settings** > **Devices & Servi
 - **Polling interval**: Adjust the status polling frequency
 - **Shutter travel time**: Fine-tune position estimation for your shutters
 - **Enable Delios Inverter**: Toggle Delios inverter management on/off
+- **Enable Samsung AC / Canalizzato**: Toggle Samsung air conditioner management on/off
+- **Alarm PIN** and **Alarm state / siren element IDs**: Configure or adjust the alarm panel
 
 ## Energy Sensors
 
@@ -80,8 +86,9 @@ This integration auto-discovers all elements from your system and creates the ap
 - `PowerMenagementElement`
 - `StatusElement`
 - `SwitchElement`, `UpDownSwitchElement`
+- `VirtualKeypadElement` (exposed as an `alarm_control_panel` when an Alarm PIN is configured)
 
-Elements of type `WebPageElement` and `VirtualKeypadElement` are ignored as they are not controllable devices.
+Elements of type `WebPageElement` are ignored as they are not controllable devices.
 
 ## Troubleshooting
 
