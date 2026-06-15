@@ -20,6 +20,14 @@
       "naming": {
         "title": "Rinomina Dispositivi",
         "description": "Trovati {count} dispositivi sulla centralina. Personalizza i nomi qui sotto. Ogni campo mostra il tipo di dispositivo e il suo ID. Il valore predefinito \u00e8 il nome originale dalla centralina."
+      },
+      "reauth_confirm": {
+        "title": "Riautenticazione Domologica UNA Automation",
+        "description": "La centralina ha rifiutato le credenziali salvate. Inserisci nome utente e password attuali.",
+        "data": {
+          "username": "Nome utente",
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -28,7 +36,8 @@
       "unknown": "Si \u00e8 verificato un errore imprevisto."
     },
     "abort": {
-      "already_configured": "Questo sistema Domologica \u00e8 gi\u00e0 configurato."
+      "already_configured": "Questo sistema Domologica \u00e8 gi\u00e0 configurato.",
+      "reauth_successful": "Riautenticazione completata con successo."
     }
   },
   "options": {

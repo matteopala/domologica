@@ -10,7 +10,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 
 from .const import DEFAULT_POLLING_INTERVAL, DEFAULT_TRAVEL_TIME, DOMAIN, INTEGRATION_NAME, TYPE_LABELS
-from .api_client import DomologicaApiClient
+from .api_client import DomologicaApiClient, DomologicaAuthError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ class DomologicaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._user_input: dict = {}
         self._discovered: dict = {}
         self._naming_key_to_eid: dict = {}
+        self._reauth_entry = None
 
     async def async_step_user(self, user_input=None):
         """Step 1: Connection to the controller."""
@@ -69,6 +70,8 @@ class DomologicaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     errors["base"] = "cannot_connect"
+            except DomologicaAuthError:
+                errors["base"] = "invalid_auth"
             except Exception:
                 _LOGGER.exception("Error during connection test")
                 errors["base"] = "unknown"
@@ -139,6 +142,59 @@ class DomologicaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "count": str(len(self._discovered)),
             },
+        )
+
+    async def async_step_reauth(self, entry_data):
+        """Triggered by ConfigEntryAuthFailed when credentials are rejected."""
+        self._reauth_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input=None):
+        """Ask for fresh credentials and validate them against the controller."""
+        errors = {}
+        entry = self._reauth_entry
+
+        if user_input is not None:
+            client = DomologicaApiClient(
+                self.hass,
+                entry.data["base_url"],
+                user_input["username"],
+                user_input["password"],
+            )
+            try:
+                connected = await client.async_test_connection()
+            except DomologicaAuthError:
+                errors["base"] = "invalid_auth"
+            except Exception:
+                _LOGGER.exception("Error during reauth connection test")
+                errors["base"] = "unknown"
+            else:
+                if connected:
+                    self.hass.config_entries.async_update_entry(
+                        entry,
+                        data={
+                            **entry.data,
+                            "username": user_input["username"],
+                            "password": user_input["password"],
+                        },
+                    )
+                    await self.hass.config_entries.async_reload(entry.entry_id)
+                    return self.async_abort(reason="reauth_successful")
+                errors["base"] = "cannot_connect"
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "username", default=entry.data.get("username", "")
+                    ): str,
+                    vol.Required("password"): str,
+                }
+            ),
+            errors=errors,
         )
 
     @staticmethod

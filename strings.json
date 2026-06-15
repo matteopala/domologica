@@ -20,6 +20,14 @@
       "naming": {
         "title": "Rename Devices",
         "description": "Found {count} devices on your system. Customize their names below. Each field label shows the device type and ID. The default value is the original name from the controller."
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Domologica UNA Automation",
+        "description": "The controller rejected the stored credentials. Enter the current username and password.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -28,7 +36,8 @@
       "unknown": "An unexpected error occurred."
     },
     "abort": {
-      "already_configured": "This Domologica system is already configured."
+      "already_configured": "This Domologica system is already configured.",
+      "reauth_successful": "Re-authentication was successful."
     }
   },
   "options": {

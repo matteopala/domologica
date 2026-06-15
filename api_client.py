@@ -19,6 +19,10 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+class DomologicaAuthError(Exception):
+    """Raised when the controller rejects the credentials (HTTP 401)."""
+
+
 class DomologicaApiClient:
     """Asynchronous HTTP client for communicating with the Vesta control unit."""
 
@@ -60,23 +64,28 @@ class DomologicaApiClient:
                     url, auth=self._auth, timeout=self._timeout
                 ) as resp:
                     if resp.status == 401:
-                        _LOGGER.error("Authentication failed for %s", url)
-                        return None
+                        # Surface auth failures so the coordinator can trigger a
+                        # reauth flow instead of retrying forever.
+                        raise DomologicaAuthError(f"Authentication failed for {url}")
                     if resp.status != 200:
-                        _LOGGER.error("HTTP %s for %s", resp.status, url)
+                        _LOGGER.debug("HTTP %s for %s", resp.status, url)
                         return None
                     content = await resp.text()
                     if not content or not content.strip().startswith("<"):
                         return None
                     return ET.fromstring(content)
+            # Transient request failures are logged at DEBUG only: the
+            # DataUpdateCoordinator already logs the first failure (once) via
+            # UpdateFailed and stays quiet until recovery, so logging here too
+            # just floods the log during an outage.
             except asyncio.TimeoutError:
-                _LOGGER.error("Timeout during request to %s", url)
+                _LOGGER.debug("Timeout during request to %s", url)
                 return None
             except aiohttp.ClientError as err:
-                _LOGGER.error("Connection error to %s: %s", url, err)
+                _LOGGER.debug("Connection error to %s: %s", url, err)
                 return None
             except ET.ParseError as err:
-                _LOGGER.error("Invalid XML from %s: %s", url, err)
+                _LOGGER.debug("Invalid XML from %s: %s", url, err)
                 return None
 
     # ── Connection Test ─────────────────────────────────────────
@@ -134,7 +143,7 @@ class DomologicaApiClient:
                     )
                     continue
 
-                _LOGGER.info(
+                _LOGGER.debug(
                     "Discovered element: id=%s, class=%s, name=%s, scene=%s",
                     eid, eclass, (ename or "").strip(), scene_name,
                 )
@@ -147,9 +156,9 @@ class DomologicaApiClient:
             # Small pause to avoid stressing the control unit
             await asyncio.sleep(0.2)
 
-        _LOGGER.info("Discovery completed: %s elements found", len(element_info))
+        _LOGGER.debug("Discovery completed: %s elements found", len(element_info))
         for eid, info in element_info.items():
-            _LOGGER.info("  -> %s: %s (%s)", eid, info["name"], info["class"])
+            _LOGGER.debug("  -> %s: %s (%s)", eid, info["name"], info["class"])
         return element_info
 
     # ── Polling statuses ────────────────────────────────────────────
