@@ -4,12 +4,13 @@ from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
 
-from .api_client import DomologicaApiClient
+from .api_client import DomologicaApiClient, DomologicaAuthError
 from .const import (
     DEFAULT_POLLING_INTERVAL,
     DEFAULT_TRAVEL_TIME,
@@ -123,7 +124,10 @@ class DomologicaCoordinator(DataUpdateCoordinator):
         """Discover elements from the controller."""
         _LOGGER.info("Starting discovery on %s", self.api_client.base_url)
 
-        self.element_info = await self.api_client.async_discover_elements()
+        try:
+            self.element_info = await self.api_client.async_discover_elements()
+        except DomologicaAuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
 
         if not self.element_info:
             _LOGGER.error("No elements found during discovery")
@@ -235,7 +239,11 @@ class DomologicaCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict:
         """Periodic status retrieval via XML polling."""
-        root = await self.api_client.async_fetch_all_statuses()
+        try:
+            root = await self.api_client.async_fetch_all_statuses()
+        except DomologicaAuthError as err:
+            # Credentials no longer valid → ask the user to re-authenticate.
+            raise ConfigEntryAuthFailed(str(err)) from err
 
         if root is None:
             raise UpdateFailed("Error retrieving XML statuses")
