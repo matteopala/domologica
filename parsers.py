@@ -281,14 +281,13 @@ def parse_delios(statuses: dict) -> dict:
 
 
 def parse_power_management(statuses: dict) -> dict:
-    current_power = _safe_float(_get_status_value(statuses, "pwmValue"))
-    max_power = _safe_float(_get_status_value(statuses, "MaxWattCalculatedValue"))
+    # The controller only exposes load-shedding flags for this element
+    # (NormalMeasure + IsRun/IsStopped); it does NOT report a numeric current
+    # consumption or a max threshold, so only the on/off switch is created.
     is_running = _has_status(statuses, "IsRun")
     is_normal = _has_status(statuses, "NormalMeasure")
 
     return {
-        "current_power": current_power,
-        "max_power": max_power,
         "is_running": is_running,
         "is_normal": is_normal,
     }

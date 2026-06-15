@@ -1,6 +1,6 @@
 """Sensor platform for the Domologica UNA Automation integration.
 
-Handles: TASensorElement, DeliosMainUnitElement, PowerMenagementElement (sensors).
+Handles: TASensorElement, DeliosMainUnitElement, ThermostatElement.
 Includes energy sensors (kWh) computed via Riemann sum integration.
 """
 import logging
@@ -98,27 +98,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
                 DomologicaThermostatSeasonSensor(coordinator, eid, info["name"])
             )
 
-        elif eclass == "PowerMenagementElement":
-            entities.append(
-                DomologicaPowerMgmtSensor(
-                    coordinator, eid, info["name"], "current_power",
-                    "Current Consumption", SensorDeviceClass.POWER,
-                    UnitOfPower.WATT, SensorStateClass.MEASUREMENT,
-                )
-            )
-            entities.append(
-                DomologicaPowerMgmtSensor(
-                    coordinator, eid, info["name"], "max_power",
-                    "Maximum Threshold", SensorDeviceClass.POWER,
-                    UnitOfPower.WATT, SensorStateClass.MEASUREMENT,
-                )
-            )
-            # Energy sensor (kWh) for current consumption
-            entities.append(
-                DomologicaEnergySensor(
-                    coordinator, eid, f"{info['name']} Consumption", "current_power"
-                )
-            )
+        # NOTE: PowerMenagementElement exposes only load-shedding flags
+        # (NormalMeasure + IsRun/IsStopped), never numeric consumption or a
+        # threshold, so it gets a switch (see switch.py) but no sensors.
 
     _LOGGER.info("Loading %s sensors", len(entities))
     async_add_entities(entities)
@@ -349,43 +331,6 @@ class DomologicaDeliosEnergySensor(CoordinatorEntity, SensorEntity):
 
         self._last_power = current_power
         self._last_update = now
-
-
-# -- Power Management Sensor -----------------------------------
-
-
-class DomologicaPowerMgmtSensor(CoordinatorEntity, SensorEntity):
-    """Power Management sensor (consumption and threshold)."""
-
-    def __init__(
-        self, coordinator, eid, parent_name, data_key, suffix_name,
-        device_class, unit, state_class,
-    ):
-        super().__init__(coordinator)
-        self._eid = eid
-        self._data_key = data_key
-        self._attr_name = f"{parent_name} {suffix_name}"
-        self._attr_device_class = device_class
-        self._attr_state_class = state_class
-        self._attr_native_unit_of_measurement = unit
-
-    @property
-    def unique_id(self):
-        return f"domologica_{self._eid}_pwrmgmt_{self._data_key}"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(**self.coordinator.device_info_dict)
-
-    @property
-    def native_value(self):
-        data = (self.coordinator.data or {}).get(self._eid)
-        if data and data.get(self._data_key) is not None:
-            try:
-                return float(data[self._data_key])
-            except (ValueError, TypeError):
-                return None
-        return None
 
 
 # -- Thermostat Sensors ----------------------------------------
