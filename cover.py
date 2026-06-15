@@ -62,6 +62,13 @@ class DomologicaCover(CoordinatorEntity, RestoreEntity, CoverEntity):
         self._target = None
         self._was_moving = False
         self._move_started = None
+        # After a commanded move finishes, the controller sometimes keeps
+        # reporting the movement flag (e.g. it doesn't clear isgoingdown at the
+        # bottom limit), which would leave the entity stuck "opening"/"closing".
+        # Once we consider the move complete we trust that until the device
+        # reports a *different* movement state (e.g. an external command).
+        self._completed = False
+        self._completed_flags = None
 
     async def async_added_to_hass(self) -> None:
         """Restore last known position when HA starts."""
@@ -117,35 +124,59 @@ class DomologicaCover(CoordinatorEntity, RestoreEntity, CoverEntity):
                     0, self._attr_current_cover_position - movement
                 )
 
-        # Movement just ended after a full OPEN/CLOSE command (no STOP): snap to
-        # the commanded endpoint. Without this the time estimate freezes wherever
-        # it happened to be when the motor's finecorsa stopped reporting movement,
-        # so the cover "often doesn't reach 100%". Guarded by _MIN_MOVE_BEFORE_SNAP
-        # so the brief post-command flag flicker can't snap us early.
-        if (
-            self._was_moving
-            and not moving
-            and self._target is not None
-            and self._move_started is not None
-            and (now - self._move_started) >= _MIN_MOVE_BEFORE_SNAP
-        ):
-            self._attr_current_cover_position = self._target
-            self._target = None
-            self._move_started = None
+        # Decide whether the commanded full OPEN/CLOSE (no STOP) is complete:
+        #  - the device reported movement ended (normal case, e.g. opening), or
+        #  - enough time elapsed for a full travel even though the controller is
+        #    still latching the movement flag (e.g. isgoingdown at the bottom).
+        # Either way, snap to the commanded endpoint. Without this the time
+        # estimate would freeze wherever it happened to be when the motor's
+        # finecorsa stopped — so the cover "often doesn't reach 100%". The
+        # _MIN_MOVE_BEFORE_SNAP guard ignores the brief post-command flag flicker.
+        if self._target is not None and self._move_started is not None:
+            elapsed = now - self._move_started
+            device_stopped = (
+                self._was_moving and not moving and elapsed >= _MIN_MOVE_BEFORE_SNAP
+            )
+            timed_out = elapsed >= self._travel_time + _MIN_MOVE_BEFORE_SNAP
+            if device_stopped or timed_out:
+                self._attr_current_cover_position = self._target
+                # Remember the device flags at completion; is_opening/is_closing
+                # report "stopped" until the device reports something different.
+                self._completed = True
+                self._completed_flags = (is_opening, is_closing)
+                self._target = None
+                self._move_started = None
+                moving = False
 
         self._was_moving = moving
         self._last_tick = now if moving else None
         return int(self._attr_current_cover_position)
 
+    def _movement_settled(self) -> bool:
+        """True while we trust a just-completed move over the device's flags.
+
+        Cleared as soon as the device reports a different movement state than it
+        had at completion (e.g. an externally triggered move), so external
+        movement is never hidden.
+        """
+        if not self._completed:
+            return False
+        data = self.coordinator.data.get(self._eid, {}) if self.coordinator.data else {}
+        current = (data.get("is_opening", False), data.get("is_closing", False))
+        if current != self._completed_flags:
+            self._completed = False
+            return False
+        return True
+
     @property
     def is_opening(self):
-        if not self.coordinator.data:
+        if not self.coordinator.data or self._movement_settled():
             return False
         return self.coordinator.data.get(self._eid, {}).get("is_opening", False)
 
     @property
     def is_closing(self):
-        if not self.coordinator.data:
+        if not self.coordinator.data or self._movement_settled():
             return False
         return self.coordinator.data.get(self._eid, {}).get("is_closing", False)
 
@@ -183,6 +214,7 @@ class DomologicaCover(CoordinatorEntity, RestoreEntity, CoverEntity):
         self._move_started = now
         self._was_moving = True
         self._target = 100
+        self._completed = False
         self.async_write_ha_state()
         await self.coordinator.api_client.async_cover_command(self._eid, "open")
         self._start_verify_task()
@@ -197,6 +229,7 @@ class DomologicaCover(CoordinatorEntity, RestoreEntity, CoverEntity):
         self._move_started = now
         self._was_moving = True
         self._target = 0
+        self._completed = False
         self.async_write_ha_state()
         await self.coordinator.api_client.async_cover_command(self._eid, "close")
         self._start_verify_task()
@@ -212,6 +245,7 @@ class DomologicaCover(CoordinatorEntity, RestoreEntity, CoverEntity):
         self._target = None
         self._was_moving = False
         self._move_started = None
+        self._completed = False
         self.async_write_ha_state()
         await self.coordinator.api_client.async_cover_command(self._eid, "stop")
         self._start_verify_task()
