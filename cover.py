@@ -19,6 +19,12 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+# Minimum time (seconds) a cover must have been moving before we trust an
+# end-of-travel snap. The device briefly drops the movement flag right after
+# a command is issued (a sub-second "isgoingup" flicker); this guard prevents
+# that transient from snapping the position prematurely.
+_MIN_MOVE_BEFORE_SNAP = 3.0
+
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
@@ -48,6 +54,14 @@ class DomologicaCover(CoordinatorEntity, RestoreEntity, CoverEntity):
         self._attr_current_cover_position = 50  # default, overridden by restore
         self._last_tick = None
         self._verify_task = None
+        # End-of-travel snap: the device only reports movement flags, never a
+        # real position, and supports only full OPEN/CLOSE (no set_position).
+        # So a completed open/close always lands at an endpoint. _target holds
+        # that commanded endpoint (100 / 0); STOP clears it to keep the
+        # time-estimated partial position.
+        self._target = None
+        self._was_moving = False
+        self._move_started = None
 
     async def async_added_to_hass(self) -> None:
         """Restore last known position when HA starts."""
@@ -88,9 +102,10 @@ class DomologicaCover(CoordinatorEntity, RestoreEntity, CoverEntity):
         data = self.coordinator.data.get(self._eid, {})
         is_opening = data.get("is_opening", False)
         is_closing = data.get("is_closing", False)
+        moving = is_opening or is_closing
 
         now = time.time()
-        if (is_opening or is_closing) and self._last_tick:
+        if moving and self._last_tick:
             diff = now - self._last_tick
             movement = (diff / max(1, self._travel_time)) * 100
             if is_opening:
@@ -102,7 +117,24 @@ class DomologicaCover(CoordinatorEntity, RestoreEntity, CoverEntity):
                     0, self._attr_current_cover_position - movement
                 )
 
-        self._last_tick = now if (is_opening or is_closing) else None
+        # Movement just ended after a full OPEN/CLOSE command (no STOP): snap to
+        # the commanded endpoint. Without this the time estimate freezes wherever
+        # it happened to be when the motor's finecorsa stopped reporting movement,
+        # so the cover "often doesn't reach 100%". Guarded by _MIN_MOVE_BEFORE_SNAP
+        # so the brief post-command flag flicker can't snap us early.
+        if (
+            self._was_moving
+            and not moving
+            and self._target is not None
+            and self._move_started is not None
+            and (now - self._move_started) >= _MIN_MOVE_BEFORE_SNAP
+        ):
+            self._attr_current_cover_position = self._target
+            self._target = None
+            self._move_started = None
+
+        self._was_moving = moving
+        self._last_tick = now if moving else None
         return int(self._attr_current_cover_position)
 
     @property
@@ -146,7 +178,11 @@ class DomologicaCover(CoordinatorEntity, RestoreEntity, CoverEntity):
             self.coordinator.data.setdefault(self._eid, {}).update(
                 {"is_opening": True, "is_closing": False}
             )
-        self._last_tick = time.time()
+        now = time.time()
+        self._last_tick = now
+        self._move_started = now
+        self._was_moving = True
+        self._target = 100
         self.async_write_ha_state()
         await self.coordinator.api_client.async_cover_command(self._eid, "open")
         self._start_verify_task()
@@ -156,7 +192,11 @@ class DomologicaCover(CoordinatorEntity, RestoreEntity, CoverEntity):
             self.coordinator.data.setdefault(self._eid, {}).update(
                 {"is_opening": False, "is_closing": True}
             )
-        self._last_tick = time.time()
+        now = time.time()
+        self._last_tick = now
+        self._move_started = now
+        self._was_moving = True
+        self._target = 0
         self.async_write_ha_state()
         await self.coordinator.api_client.async_cover_command(self._eid, "close")
         self._start_verify_task()
@@ -167,6 +207,11 @@ class DomologicaCover(CoordinatorEntity, RestoreEntity, CoverEntity):
                 {"is_opening": False, "is_closing": False}
             )
         self._last_tick = None
+        # Explicit STOP → keep the time-estimated partial position; cancel any
+        # pending endpoint snap so we don't jump to 0/100.
+        self._target = None
+        self._was_moving = False
+        self._move_started = None
         self.async_write_ha_state()
         await self.coordinator.api_client.async_cover_command(self._eid, "stop")
         self._start_verify_task()
