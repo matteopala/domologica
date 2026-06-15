@@ -14,6 +14,7 @@ from .const import (
     IGNORED_CLASSES,
     MAX_CONCURRENT_REQUESTS,
     REQUEST_TIMEOUT,
+    SLOT_ACQUIRE_TIMEOUT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,36 +58,53 @@ class DomologicaApiClient:
     async def async_get_xml(self, endpoint: str) -> ET.Element | None:
         """Performs a GET request on an endpoint and returns the parsed XML."""
         url = f"{self.base_url}{endpoint}"
-        async with self._semaphore:
-            try:
-                session = self._session()
-                async with session.get(
-                    url, auth=self._auth, timeout=self._timeout
-                ) as resp:
-                    if resp.status == 401:
-                        # Surface auth failures so the coordinator can trigger a
-                        # reauth flow instead of retrying forever.
-                        raise DomologicaAuthError(f"Authentication failed for {url}")
-                    if resp.status != 200:
-                        _LOGGER.debug("HTTP %s for %s", resp.status, url)
-                        return None
-                    content = await resp.text()
-                    if not content or not content.strip().startswith("<"):
-                        return None
-                    return ET.fromstring(content)
-            # Transient request failures are logged at DEBUG only: the
-            # DataUpdateCoordinator already logs the first failure (once) via
-            # UpdateFailed and stays quiet until recovery, so logging here too
-            # just floods the log during an outage.
-            except asyncio.TimeoutError:
-                _LOGGER.debug("Timeout during request to %s", url)
-                return None
-            except aiohttp.ClientError as err:
-                _LOGGER.debug("Connection error to %s: %s", url, err)
-                return None
-            except ET.ParseError as err:
-                _LOGGER.debug("Invalid XML from %s: %s", url, err)
-                return None
+        # Bound the wait for a concurrency slot. The controller has limited
+        # capacity; if every slot is held by a wedged request, acquiring the
+        # semaphore would otherwise block forever and silently stall ALL polling
+        # (no UpdateFailed is ever raised). Time out instead, so the coordinator
+        # gets a failure it can log and retry from.
+        try:
+            await asyncio.wait_for(
+                self._semaphore.acquire(), timeout=SLOT_ACQUIRE_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            _LOGGER.warning(
+                "No free request slot for %s within %ss — controller may be "
+                "overwhelmed; skipping this fetch",
+                url, SLOT_ACQUIRE_TIMEOUT,
+            )
+            return None
+        try:
+            session = self._session()
+            async with session.get(
+                url, auth=self._auth, timeout=self._timeout
+            ) as resp:
+                if resp.status == 401:
+                    # Surface auth failures so the coordinator can trigger a
+                    # reauth flow instead of retrying forever.
+                    raise DomologicaAuthError(f"Authentication failed for {url}")
+                if resp.status != 200:
+                    _LOGGER.debug("HTTP %s for %s", resp.status, url)
+                    return None
+                content = await resp.text()
+                if not content or not content.strip().startswith("<"):
+                    return None
+                return ET.fromstring(content)
+        # Transient request failures are logged at DEBUG only: the
+        # DataUpdateCoordinator already logs the first failure (once) via
+        # UpdateFailed and stays quiet until recovery, so logging here too
+        # just floods the log during an outage.
+        except asyncio.TimeoutError:
+            _LOGGER.debug("Timeout during request to %s", url)
+            return None
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("Connection error to %s: %s", url, err)
+            return None
+        except ET.ParseError as err:
+            _LOGGER.debug("Invalid XML from %s: %s", url, err)
+            return None
+        finally:
+            self._semaphore.release()
 
     # ── Connection Test ─────────────────────────────────────────
 

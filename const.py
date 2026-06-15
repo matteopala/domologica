@@ -39,6 +39,10 @@ PLATFORMS = [
 REQUEST_TIMEOUT = 30
 CONNECT_TIMEOUT = 10
 MAX_CONCURRENT_REQUESTS = 3
+# Max time to wait for a free concurrency slot before abandoning a fetch, so a
+# wedged request can never stall all polling indefinitely (must exceed
+# REQUEST_TIMEOUT, the longest a slot can legitimately stay held).
+SLOT_ACQUIRE_TIMEOUT = 45
 
 # Default configuration
 DEFAULT_POLLING_INTERVAL = 15
